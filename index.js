@@ -57,7 +57,7 @@ function mainMenu() {
 function viewAllDepartments() {
 	return connection
 		.promise()
-		.query("SELECT * FROM department")
+		.query("SELECT name, id FROM department")
 		.then(([dept]) => {
 			console.table(dept);
 			mainMenu();
@@ -70,7 +70,7 @@ function viewAllDepartments() {
 function viewAllRoles() {
 	return connection
 		.promise()
-		.query("SELECT * FROM role")
+		.query("SELECT title, id, department_id, salary FROM role")
 		.then(([roles]) => {
 			console.table(roles);
 			mainMenu();
@@ -82,7 +82,9 @@ function viewAllRoles() {
 function viewAllEmployees() {
 	return connection
 		.promise()
-		.query("SELECT * FROM employee")
+		.query(
+			'SELECT employee.id AS employee_id, employee.first_name, employee.last_name, role.title AS job_title, department.name AS department, role.salary, CONCAT(manager.first_name," ", manager.last_name) AS manager_name FROM employee  INNER JOIN role on employee.role_id = role.id INNER JOIN department on role.department_id = department.id LEFT JOIN employee AS manager on employee.manager_id = manager.id'
+		)
 		.then(([employees]) => {
 			console.table(employees);
 			mainMenu();
@@ -230,7 +232,7 @@ async function addEmployee() {
 		});
 }
 
-function fectEmployeesAndRoles() {
+function fetchEmployeesAndRoles() {
 	return Promise.all([
 		connection
 			.promise()
@@ -238,12 +240,16 @@ function fectEmployeesAndRoles() {
 				'SELECT id, CONCAT(first_name," ", last_name) AS name FROM employee'
 			),
 		connection.promise().query("SELECT id, title FROM role"),
-	]).then(([employees, roles]) => {
-		return { employees: employees[0], roles: roles[0] };
-	});
+	])
+		.then(([employees, roles]) => {
+			return { employees: employees[0], roles: roles[0] };
+		})
+		.catch((error) => {
+			console.error("Error fetching employees and roles:", error);
+		});
 }
 async function updateEmployee() {
-	const { employees, roles } = await fectEmployeesAndRoles();
+	const { employees, roles } = await fetchEmployeesAndRoles();
 	inquirer
 		.prompt([
 			{
@@ -265,12 +271,12 @@ async function updateEmployee() {
 		.then((answers) => {
 			connection
 				.promise()
-				.query(`UPDATE employee SET role = ? WHERE name = ?`, [
-					answers.empRoleUpdateName,
+				.query(`UPDATE employee SET role_id = ? WHERE id = ?`, [
 					answers.empRoleUpdateRole,
+					answers.empRoleUpdateName,
 				])
 				.then(() => {
-					console.log("Employee updated:", result.insertId);
+					console.log("Employee updated:", answers.empRoleUpdateName);
 					mainMenu();
 				})
 				.catch((error) => {
