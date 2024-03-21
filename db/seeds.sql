@@ -70,4 +70,3 @@ VALUES("Ava", "Smith", 10, 18),
 ("Viva", "Lozvegus", 13, 21),
 ("Wiva", "Johns", 13, 21),
 ("Xiva", "Jaspers", 13, 21);
-       
