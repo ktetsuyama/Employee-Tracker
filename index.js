@@ -1,6 +1,13 @@
 const inquirer = require("inquirer");
-const mysql = require("mysql");
+const mysql = require("mysql2");
 require("dotenv").config();
+
+const connection = mysql.createConnection({
+	host: "localhost",
+	user: process.env.DB_USER,
+	password: process.env.DB_PASSWORD,
+	database: process.env.DB_NAME,
+});
 
 function mainMenu() {
 	inquirer
@@ -22,7 +29,13 @@ function mainMenu() {
 			},
 		])
 		.then((answers) => {
-			if (answers.mainOptions === "Add a Department") {
+			if (answers.mainOptions === "View All Departments") {
+				return viewAllDepartments();
+			} else if (answers.mainOptions === "View All Roles") {
+				return viewAllRoles();
+			} else if (answers.mainOptions === "View All Employees") {
+				return viewAllEmployees();
+			} else if (answers.mainOptions === "Add a Department") {
 				return addDeparment();
 			} else if (answers.mainOptions === "Add a Role") {
 				return addRole();
@@ -34,13 +47,51 @@ function mainMenu() {
 				console.log("Exiting...");
 				process.exit();
 			} else {
-				// Handle other main options here
 				console.log("You selected:", answers.mainOptions);
 				// Re-initialize the main menu
 				mainMenu();
 			}
 		});
 }
+
+function viewAllDepartments() {
+	return connection
+		.promise()
+		.query("SELECT * FROM department")
+		.then(([dept]) => {
+			console.table(dept);
+			mainMenu();
+		})
+		.catch((error) => {
+			console.log("Error fetching departments:", error);
+		});
+}
+
+function viewAllRoles() {
+	return connection
+		.promise()
+		.query("SELECT * FROM role")
+		.then(([roles]) => {
+			console.table(roles);
+			mainMenu();
+		})
+		.catch((error) => {
+			console.log("Error fetching roles:", error);
+		});
+}
+function viewAllEmployees() {
+	return connection
+		.promise()
+		.query("SELECT * FROM employee")
+		.then(([employees]) => {
+			console.table(employees);
+			mainMenu();
+		})
+		.catch((error) => {
+			console.log("Error fetching employees:", error);
+		});
+}
+
 function addDeparment() {
 	inquirer
 		.prompt([
@@ -51,31 +102,30 @@ function addDeparment() {
 			},
 		])
 		.then((answers) => {
-			// Step 2: Connect to the database
-			const connection = mysql.createConnection({
-				host: "localhost",
-				user: process.env.DB_USER,
-				password: process.env.DB_PASSWORD,
-				database: process.env.DB_NAME,
-			});
-
-			connection.connect((err) => {
-				if (err) throw err;
-				console.log("Connected to the database!");
-
-				// Step 3: Construct the SQL query
-				const sql = `INSERT INTO department (department_name) VALUES ('${answers.newDepartment}')`;
-
-				// Step 4: Execute the SQL query
-				connection.query(sql, (err, result) => {
-					if (err) throw err;
+			connection
+				.promise()
+				.query(
+					`INSERT INTO department (name) VALUES ('${answers.newDepartment}')`
+				)
+				.then(() => {
 					console.log("New department added:", answers.newDepartment);
-					connection.end();
+					mainMenu();
+				})
+				.catch((error) => {
+					console.log("Error adding department:", error);
 				});
-			});
 		});
 }
-function addRole() {
+
+function fetchRoleChoices() {
+	return connection
+		.promise()
+		.query(`SELECT id AS value, name FROM department`)
+		.then(([results]) => results);
+}
+
+async function addRole() {
+	const choices = await fetchRoleChoices();
 	inquirer
 		.prompt([
 			{
@@ -92,40 +142,40 @@ function addRole() {
 				type: "list",
 				message: "What is the Department of the new Role?",
 				name: "newRoleDept",
-				choices: [],
+				choices: choices,
 			},
 		])
 		.then((answers) => {
-			// Step 2: Connect to the database
-			const connection = mysql.createConnection({
-				host: "localhost",
-				user: process.env.DB_USER,
-				password: process.env.DB_PASSWORD,
-				database: process.env.DB_NAME,
-			});
-
-			connection.connect((err) => {
-				if (err) throw err;
-				console.log("Connected to the database!");
-
-				// Step 3: Construct the SQL query
-				const sql = `INSERT INTO role (title, salary, department_id) VALUES (?, ?, ?)`;
-				const params = [
-					answers.newRoleName,
-					answers.newRoleSalary,
-					answers.newRoleDept,
-				];
-
-				// Step 4: Execute the SQL query
-				connection.query(sql, params, (err, result) => {
-					if (err) throw err;
-					console.log("New role added:", answers.newRoleName);
-					connection.end();
+			connection
+				.promise()
+				.query(
+					"INSERT INTO role (title, salary, department_id) VALUES (?,?,?)",
+					[answers.newRoleName, answers.newRoleSalary, answers.newRoleDept]
+				)
+				.then(() => {
+					console.log("New Role added:", answers.newRoleName);
+					mainMenu();
+				})
+				.catch((error) => {
+					console.error("Error adding new Role:", error);
 				});
-			});
 		});
 }
-function addEmployee() {
+
+function fecthRolesAndManagers() {
+	return Promise.all([
+		connection.promise().query("SELECT id, title FROM role"),
+		connection
+			.promise()
+			.query(
+				'SELECT id, CONCAT(first_name," ", last_name) AS name FROM employee'
+			),
+	]).then(([roles, managers]) => {
+		return { roles: roles[0], managers: managers[0] };
+	});
+}
+async function addEmployee() {
+	const { roles, managers } = await fecthRolesAndManagers();
 	inquirer
 		.prompt([
 			{
@@ -142,86 +192,90 @@ function addEmployee() {
 				type: "list",
 				message: "What is the role of the new Employee?",
 				name: "newEmployeeRole",
-				choices: [],
+				choices: roles.map((role) => ({ name: role.title, value: role.id })),
 			},
 			{
 				type: "list",
 				message: "Who is the manager of the new Employee?",
 				name: "newEmployeeManager",
-				choices: [],
+				choices: managers.map((manager) => ({
+					name: manager.name,
+					value: manager.id,
+				})),
 			},
 		])
 		.then((answers) => {
-			// Step 2: Connect to the database
-			const connection = mysql.createConnection({
-				host: "localhost",
-				user: process.env.DB_USER,
-				password: process.env.DB_PASSWORD,
-				database: process.env.DB_NAME,
-			});
-
-			connection.connect((err) => {
-				if (err) throw err;
-				console.log("Connected to the database!");
-
-				// Step 3: Construct the SQL query
-				const sql = `INSERT INTO employee (first_name, last_name, role_id, manager_id) VALUES (?, ?, ?, ?)`;
-				const params = [
-					answers.newRoleName,
-					answers.newRoleSalary,
-					answers.newRoleDept,
-				];
-
-				// Step 4: Execute the SQL query
-				connection.query(sql, params, (err, result) => {
-					if (err) throw err;
-					console.log("New role added:", answers.newRoleName);
-					connection.end();
+			connection
+				.promise()
+				.query(
+					"INSERT INTO employee (first_name, last_name, role_id, manager_id) VALUES (?,?,?,?)",
+					[
+						answers.newEmployeeFn,
+						answers.newEmployeeLn,
+						answers.newEmployeeRole,
+						answers.newEmployeeManager,
+					]
+				)
+				.then(() => {
+					console.log(
+						"New Employee added:",
+						answers.newEmployeeFn,
+						answers.newEmployeeLn
+					);
+					mainMenu();
+				})
+				.catch((error) => {
+					console.error("Error adding new Employee:", error);
 				});
-			});
 		});
 }
-function updateEmployee() {
+
+function fectEmployeesAndRoles() {
+	return Promise.all([
+		connection
+			.promise()
+			.query(
+				'SELECT id, CONCAT(first_name," ", last_name) AS name FROM employee'
+			),
+		connection.promise().query("SELECT id, title FROM role"),
+	]).then(([employees, roles]) => {
+		return { employees: employees[0], roles: roles[0] };
+	});
+}
+async function updateEmployee() {
+	const { employees, roles } = await fectEmployeesAndRoles();
 	inquirer
 		.prompt([
 			{
 				type: "list",
 				message: "Which employee's role do you want to update?",
 				name: "empRoleUpdateName",
-				choices: [],
+				choices: employees.map((employee) => ({
+					name: employee.name,
+					value: employee.id,
+				})),
 			},
 			{
 				type: "list",
 				message: "Which role do you want to assign to the selected employee?",
 				name: "empRoleUpdateRole",
-				choices: [],
+				choices: roles.map((role) => ({ name: role.title, value: role.id })),
 			},
 		])
 		.then((answers) => {
-			// Step 2: Connect to the database
-			const connection = mysql.createConnection({
-				host: "localhost",
-				user: process.env.DB_USER,
-				password: process.env.DB_PASSWORD,
-				database: process.env.DB_NAME,
-			});
-
-			connection.connect((err) => {
-				if (err) throw err;
-				console.log("Connected to the database!");
-
-				// Step 3: Construct the SQL query
-				const sql = `UPDATE employee SET role = ? WHERE name = ?`;
-				const params = [answers.empRoleUpdateName, answers.empRoleUpdateRole];
-
-				// Step 4: Execute the SQL query
-				connection.query(sql, params, (err, result) => {
-					if (err) throw err;
-					console.log("Employee Role Updated:", answers.empRoleUpdateName);
-					connection.end();
+			connection
+				.promise()
+				.query(`UPDATE employee SET role = ? WHERE name = ?`, [
+					answers.empRoleUpdateName,
+					answers.empRoleUpdateRole,
+				])
+				.then(() => {
+					console.log("Employee updated:", result.insertId);
+					mainMenu();
+				})
+				.catch((error) => {
+					console.error("Error Updating Employee:", error);
 				});
-			});
 		});
 }
-
 mainMenu();
