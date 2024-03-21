@@ -28,7 +28,7 @@ I created an Inquirer prompt set to allow the user to accomplish the desired fun
 
 Here is a video of the application in action:
 
-[Link to Video]()
+[Link to Video](https://youtu.be/qrxBaJAhZF4)
 
 ## Contributors
 
