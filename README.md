@@ -32,13 +32,15 @@ Here is a video of the application in action:
 
 ## Contributors
 
+I worked with George Schultz during the development of this application. I also received troubleshooting help from Mija Dilberovic.
+
+I used phind.com to help with debugging.
+
 ## Credits
 
 I used the following guides in building this application:
 
 [How to use AUTO_INCREMENT in MySQL](https://dev.mysql.com/doc/refman/8.0/en/example-auto-increment.html)
-
-[https://www.phind.com](https://www.phind.com)
 
 ## Contact
 
